@@ -1,6 +1,7 @@
 import streamlit as st
 import pickle
 import locale
+from sklearn.linearmodels import LinearRegression
 
 model = pickle.load(open('model.pickle', 'rb'))
 params = pickle.load(open('params.pickle', 'rb'))
