@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: house-price-streamlit
+  namespace: ml-platform
+  labels:
+    app: house-price-streamlit
+    component: dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: house-price-streamlit
+  template:
+    metadata:
+      labels:
+        app: house-price-streamlit
+        component: dashboard
+    spec:
+      containers:
+      - name: streamlit
+        image: house-price-streamlit:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8501
+          name: http
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: API_URL
+          value: "http://house-price-api-service:8080"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8501
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8501
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/models
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: model-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: house-price-streamlit-service
+  namespace: ml-platform
+  labels:
+    app: house-price-streamlit
+spec:
+  selector:
+    app: house-price-streamlit
+  ports:
+  - port: 8501
+    targetPort: 8501
+    name: http
+  type: ClusterIP

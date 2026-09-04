@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: house-price-api
+  namespace: ml-platform
+  labels:
+    app: house-price-api
+    component: inference
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: house-price-api
+  template:
+    metadata:
+      labels:
+        app: house-price-api
+        component: inference
+    spec:
+      containers:
+      - name: api
+        image: house-price-api:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: MODEL_PATH
+          value: "/app/models/model.pickle"
+        - name: PARAMS_PATH
+          value: "/app/models/params.pickle"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/models
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: model-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: house-price-api-service
+  namespace: ml-platform
+  labels:
+    app: house-price-api
+spec:
+  selector:
+    app: house-price-api
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  type: ClusterIP
