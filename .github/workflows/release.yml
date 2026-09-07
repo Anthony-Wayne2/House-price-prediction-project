@@ -30,7 +30,7 @@ jobs:
           docker build -t ghcr.io/${{ github.repository }}/streamlit:${{ steps.get_version.outputs.VERSION }} -f Dockerfile.streamlit .
           docker tag ghcr.io/${{ github.repository }}/api:${{ steps.get_version.outputs.VERSION }} ghcr.io/${{ github.repository }}/api:latest
           docker tag ghcr.io/${{ github.repository }}/streamlit:${{ steps.get_version.outputs.VERSION }} ghcr.io/${{ github.repository }}/streamlit:latest
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
