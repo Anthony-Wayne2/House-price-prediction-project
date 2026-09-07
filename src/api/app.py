@@ -2,6 +2,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import sys
 import os
+import time
+from prometheus_client import Counter, Histogram, generate_latest, REGISTRY
+from starlette.responses import Response
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -14,6 +17,11 @@ app = FastAPI(
     description="API for predicting house prices in Bengaluru",
     version="1.0.0"
 )
+
+# Define metrics
+PREDICTION_COUNT = Counter('house_price_predictions_total', 'Total number of predictions made')
+PREDICTION_LATENCY = Histogram('house_price_prediction_seconds', 'Prediction latency in seconds')
+PREDICTION_ERRORS = Counter('house_price_prediction_errors_total', 'Total prediction errors')
 
 # Initialize predictor (lazy loading)
 predictor = None
@@ -63,7 +71,8 @@ async def root():
         "endpoints": {
             "/predict": "POST - Predict house price",
             "/locations": "GET - List available locations",
-            "/health": "GET - Health check"
+            "/health": "GET - Health check",
+            "/metrics": "GET - Prometheus metrics"
         }
     }
 
@@ -91,6 +100,7 @@ async def get_locations():
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_price(request: PredictionRequest):
     """Predict house price based on input features."""
+    start_time = time.time()
     try:
         predictor = get_predictor()
         
@@ -101,6 +111,9 @@ async def predict_price(request: PredictionRequest):
             bedrooms=request.bedrooms,
             location=request.location
         )
+        
+        # Record metrics
+        PREDICTION_COUNT.inc()
         
         # Format response
         return PredictionResponse(
@@ -114,10 +127,76 @@ async def predict_price(request: PredictionRequest):
             }
         )
     except ValueError as e:
+        PREDICTION_ERRORS.inc()
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        PREDICTION_ERRORS.inc()
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        duration = time.time() - start_time
+        PREDICTION_LATENCY.observe(duration)
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint."""
+    return Response(generate_latest(REGISTRY), media_type="text/plain")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8080)
+
+# Add MLflow import (optional)
+try:
+    import mlflow
+    import mlflow.pyfunc
+    MLFLOW_ENABLED = True
+except ImportError:
+    MLFLOW_ENABLED = False
+    print("MLflow not available, using local model")
+
+def get_predictor_with_mlflow():
+    """Try to load model from MLflow first, fallback to local."""
+    global predictor
+    
+    if predictor is not None:
+        return predictor
+    
+    if MLFLOW_ENABLED:
+        try:
+            mlflow.set_tracking_uri("http://mlflow-tracking-service:5000")
+            # Try to load production model
+            mlflow_model = mlflow.pyfunc.load_model(
+                "models:/HousePricePredictor/Production"
+            )
+            # Wrap MLflow model to match our interface
+            class MLflowPredictor:
+                def __init__(self, model):
+                    self.model = model
+                    self.params = {'columns': [], 'prefix': 3}
+                    self.model_loaded = True
+                
+                def predict(self, total_sq_feet, bathrooms, bedrooms, location):
+                    import pandas as pd
+                    df = pd.DataFrame([{
+                        'total_sqft': total_sq_feet,
+                        'bath': bathrooms,
+                        'bhk': bedrooms,
+                        'location': location
+                    }])
+                    return self.model.predict(df)[0]
+                
+                def get_available_locations(self):
+                    # Use the locations from the original model
+                    import pickle
+                    with open('params.pickle', 'rb') as f:
+                        params = pickle.load(f)
+                    return params['columns']
+            
+            predictor = MLflowPredictor(mlflow_model)
+            print("Using MLflow model")
+            return predictor
+        except Exception as e:
+            print(f"MLflow model load failed: {e}")
+    
+    # Fallback to local model
+    return get_predictor()

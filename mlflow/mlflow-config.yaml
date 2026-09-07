@@ -1,0 +1,34 @@
+# MLflow Configuration
+tracking_uri: "http://mlflow-tracking-service:5000"
+model_registry:
+registry_uri: "http://mlflow-tracking-service:5000"
+
+# Model Registry Settings
+  stage_transitions:
+    - from: "None"
+      to: "Staging"
+      allowed_users: ["data_scientist", "ml_engineer"]
+    - from: "Staging"
+      to: "Production"
+      allowed_users: ["ml_engineer", "devops"]
+    - from: "Production"
+      to: "Archived"
+      allowed_users: ["devops"]
+
+# Artifact Storage
+artifact_location: "s3://mlflow-artifacts/house-price-prediction"
+local_artifact_path: "./mlflow/artifacts"
+
+# Experiment Settings
+experiment:
+  name: "House_Price_Prediction"
+  tags:
+    project: "house-price-prediction"
+    team: "ml-platform"
+    environment: "production"
+
+# Model Settings
+model:
+  name: "HousePricePredictor"
+  description: "Linear Regression model for Bengaluru house prices"
+  flavor: "sklearn"
