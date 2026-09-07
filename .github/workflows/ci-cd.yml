@@ -42,7 +42,7 @@ jobs:
         run: |
           pytest tests/ -v --cov=src --cov-report=xml --ignore=tests/test_api.py || true
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           file: ./coverage.xml
           fail_ci_if_error: false
