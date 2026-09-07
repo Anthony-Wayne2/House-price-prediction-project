@@ -1,0 +1,43 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            README.md
+            ROADMAP.md
+      - name: Build and push images
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/api:${{ steps.get_version.outputs.VERSION }} -f Dockerfile .
+          docker build -t ghcr.io/${{ github.repository }}/streamlit:${{ steps.get_version.outputs.VERSION }} -f Dockerfile.streamlit .
+          docker tag ghcr.io/${{ github.repository }}/api:${{ steps.get_version.outputs.VERSION }} ghcr.io/${{ github.repository }}/api:latest
+          docker tag ghcr.io/${{ github.repository }}/streamlit:${{ steps.get_version.outputs.VERSION }} ghcr.io/${{ github.repository }}/streamlit:latest
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push images
+        run: |
+          docker push ghcr.io/${{ github.repository }}/api:${{ steps.get_version.outputs.VERSION }}
+          docker push ghcr.io/${{ github.repository }}/api:latest
+          docker push ghcr.io/${{ github.repository }}/streamlit:${{ steps.get_version.outputs.VERSION }}
+          docker push ghcr.io/${{ github.repository }}/streamlit:latest

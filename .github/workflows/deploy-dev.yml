@@ -1,0 +1,39 @@
+name: Deploy to Development
+
+on:
+  push:
+    branches: [ develop ]
+  workflow_dispatch:
+
+env:
+  KUBE_NAMESPACE: ml-platform-dev
+
+jobs:
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build images
+        run: |
+          docker build -t house-price-api:dev -f Dockerfile .
+          docker build -t house-price-streamlit:dev -f Dockerfile.streamlit .
+
+      - name: Set up kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG_DEV }}" | base64 --decode > $HOME/.kube/config
+
+      - name: Deploy to Development cluster
+        run: |
+          kubectl create namespace ${{ env.KUBE_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f k8s/ -n ${{ env.KUBE_NAMESPACE }}
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/house-price-api -n ${{ env.KUBE_NAMESPACE }} --timeout=3m
+          kubectl rollout status deployment/house-price-streamlit -n ${{ env.KUBE_NAMESPACE }} --timeout=3m
+          kubectl get pods -n ${{ env.KUBE_NAMESPACE }}

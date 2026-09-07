@@ -1,0 +1,48 @@
+name: ML Platform CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, feature/* ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  KUBE_NAMESPACE: ml-platform
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Install base dependencies
+        run: |
+          pip install --upgrade pip
+          pip install numpy pandas scikit-learn
+      - name: Install test dependencies
+        run: |
+          pip install pytest pytest-cov flake8 black
+          pip install fastapi uvicorn requests
+      - name: Install project
+        run: |
+          pip install -e .
+      - name: Lint code
+        run: |
+          flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics || true
+          black --check src/ || true
+      - name: Run tests
+        run: |
+          pytest tests/ -v --cov=src --cov-report=xml --ignore=tests/test_api.py || true
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false

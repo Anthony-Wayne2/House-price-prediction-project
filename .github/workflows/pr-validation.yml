@@ -1,0 +1,36 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  validate:
+    name: Validate PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest black flake8 mypy
+      - name: Run black check
+        run: black --check src/ app/
+      - name: Run flake8
+        run: flake8 src/ app/ --count --max-complexity=10 --max-line-length=127
+      - name: Run mypy
+        run: mypy src/ --ignore-missing-imports
+      - name: Run tests
+        run: pytest tests/ -v
+      - name: Validate Kubernetes manifests
+        run: |
+          kubectl apply -f k8s/ --dry-run=client || exit 1
+          echo "Kubernetes manifests are valid!"
+      - name: Validate Docker files
+        run: |
+          docker build -t test-api -f Dockerfile . --no-cache
+          docker build -t test-streamlit -f Dockerfile.streamlit . --no-cache
+          echo "Docker files are valid!"
