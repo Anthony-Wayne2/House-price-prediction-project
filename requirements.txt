@@ -34,7 +34,7 @@ packaging==26.2
 pluggy==1.6.0
 portalocker==3.2.0
 protobuf==7.35.1
-psycopg==3.3.4
+psycopg==3.3.5
 psycopg-binary==3.3.4
 psycopg2-binary==2.9.12
 pycparser==3.0
